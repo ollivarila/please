@@ -24,6 +24,7 @@ lazy_static! {
 // TODO: COLORIZE Maybe
 // TODO: Better error handling and messages, build file needss to be delete perhaps in some cases?
 // TODO: Maybe test some edge cases
+// TODO: Add README
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
