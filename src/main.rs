@@ -114,7 +114,7 @@ impl Command {
 /// and return them as a tuple in (name, expr, value) order
 fn ask_questions() -> anyhow::Result<(String, String, String)> {
     let var_name = Input::<String>::new()
-        .with_prompt("Varible name?")
+        .with_prompt("Variable name?")
         .interact_text()
         .context("read var name")?
         .trim()
