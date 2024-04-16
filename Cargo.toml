@@ -9,8 +9,8 @@ edition = "2021"
 anyhow = { version = "1.0.82", features = ["backtrace"] }
 clap = { version = "4.5.4", features = ["derive"] }
 colour = "0.7.0"
+dialoguer = "0.11.0"
 dirs = "5.0.1"
-lazy_static = "1.4.0"
 owo-colors = "4.0.0"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"

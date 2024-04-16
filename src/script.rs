@@ -10,8 +10,10 @@ use std::{
 
 use anyhow::{ensure, Context};
 
-use crate::history_parser::{get_parser, HistoryParser};
-use crate::{SCRIPTS_DIR, STATE_DIR};
+use crate::{
+    config::Config,
+    history_parser::{get_parser, HistoryParser},
+};
 
 /// Represents a script file in the please/scripts folder,
 /// the String in the struct is the full path to the file
@@ -23,10 +25,12 @@ impl FromStr for Script {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ensure!(!s.is_empty(), "script name cannot be empty");
 
+        let config = Config::default();
+
         let script_path = if s.ends_with(".sh") {
-            SCRIPTS_DIR.join(s)
+            config.scripts_dir.join(s)
         } else {
-            SCRIPTS_DIR.join(format!("{}.sh", s))
+            config.scripts_dir.join(format!("{}.sh", s))
         };
 
         let path_str = script_path
@@ -64,7 +68,16 @@ impl Script {
     }
 
     pub fn edit(&self) {
-        todo!()
+        let path = PathBuf::from(&self.0);
+        assert!(path.exists(), "script does not exist");
+
+        let content = fs::read_to_string(&path).expect("read script file");
+        let mut editor = dialoguer::Editor::new();
+        let editor = editor.extension(".sh").trim_newlines(false);
+
+        if let Some(changed_content) = editor.edit(&content).expect("open editor") {
+            fs::write(path, changed_content).expect("save changes to file");
+        };
     }
 
     /// Returns script name i.e script
@@ -75,34 +88,10 @@ impl Script {
             .to_str()
             .expect("convert to str")
     }
-
-    pub fn start_build(&self, save_path: impl Into<PathBuf>) -> anyhow::Result<()> {
-        let file_path: PathBuf = save_path.into();
-        let file_path = if file_path.is_dir() {
-            file_path.join("build.json")
-        } else {
-            file_path
-        };
-
-        ensure!(
-            !file_path.exists(),
-            "Seems like you are already building a script"
-        );
-
-        let script_path = Path::new(&self.0);
-        let script_name = script_path
-            .file_stem()
-            .context("extract file stem")?
-            .to_str()
-            .context("convert to str")?;
-
-        let build_file = BuildFile::new(script_name);
-        build_file.save_as_new(file_path)
-    }
 }
 
-pub fn get_scripts() -> anyhow::Result<Vec<Script>> {
-    let scripts = read_dir(SCRIPTS_DIR.clone()).context("read scripts dir")?;
+pub fn get_scripts(config: Config) -> anyhow::Result<Vec<Script>> {
+    let scripts = read_dir(config.scripts_dir).context("read scripts dir")?;
     let scripts = scripts
         .filter_map(Result::ok)
         .filter_map(|entry| {
@@ -120,28 +109,58 @@ pub fn get_scripts() -> anyhow::Result<Vec<Script>> {
 
 pub struct ScriptBuilder {
     build_file: BuildFile,
+    config: Config,
 }
 
 impl ScriptBuilder {
+    pub fn build_new(script_name: impl AsRef<str>) -> Self {
+        assert!(
+            !script_name.as_ref().ends_with(".sh"),
+            "script cannot end with .sh"
+        );
+
+        let build_file = BuildFile::new(script_name.as_ref());
+        ScriptBuilder {
+            build_file,
+            config: Config::default(),
+        }
+    }
+
     pub fn load_current() -> anyhow::Result<Self> {
+        let config = Config::default();
         let builder = Self {
-            build_file: BuildFile::current_build()?,
+            build_file: BuildFile::current_build(&config)?,
+            config,
         };
+
+        assert!(
+            !builder.build_file.script_name.ends_with(".sh"),
+            "script cannot end with .sh"
+        );
 
         Ok(builder)
     }
 
+    pub fn start_build(&self) -> anyhow::Result<()> {
+        let build_file_path = self.config.state_dir.join("build.json");
+
+        ensure!(
+            !build_file_path.exists(),
+            "Seems like you are already building a script"
+        );
+
+        self.build_file.save_as_new(build_file_path)
+    }
     pub fn build(self) -> anyhow::Result<()> {
         let name = self.build_file.script_name.clone();
-        assert!(!name.ends_with(".sh"), "invalid name");
-        let path = SCRIPTS_DIR.join(format!("{name}.sh"));
+        let path = self.config.scripts_dir.join(format!("{name}.sh"));
 
         let mut script = fs::File::create(path).context("create script file")?;
 
         let content = self.parse_lines()?.join("\n");
 
         script
-            .write_all(&content.as_bytes())
+            .write_all(content.as_bytes())
             .context("write contents to script")?;
 
         self.delete_build()?;
@@ -166,9 +185,11 @@ impl ScriptBuilder {
     }
 
     pub fn delete_build(&self) -> anyhow::Result<()> {
-        let file = STATE_DIR.join("build.json");
-        assert!(file.exists(), "Build file does not exist");
-        fs::remove_file(file).context("remove build file")
+        assert!(
+            self.config.build_file_path.exists(),
+            "Build file does not exist"
+        );
+        fs::remove_file(&self.config.build_file_path).context("remove build file")
     }
 
     pub fn add_var(&mut self, var_name: String, var_expr: String) {
@@ -179,7 +200,11 @@ impl ScriptBuilder {
     }
 
     pub fn save_replace(&self) -> anyhow::Result<()> {
-        self.build_file.save_replace(STATE_DIR.join("build.json"))
+        self.build_file.save_replace(&self.config.build_file_path)
+    }
+
+    pub fn get_script_name(&self) -> String {
+        self.build_file.script_name.clone()
     }
 }
 
@@ -239,11 +264,11 @@ impl BuildFile {
         serde_json::to_writer_pretty(file, self).context("write to build file")
     }
 
-    fn current_build() -> anyhow::Result<Self> {
-        let file_path = STATE_DIR.join("build.json");
-        ensure!(file_path.exists(), "No build file found");
+    fn current_build(config: &Config) -> anyhow::Result<Self> {
+        let file = &config.build_file_path;
+        ensure!(file.exists(), "No build file found");
 
-        let file = std::fs::File::open(file_path)?;
+        let file = std::fs::File::open(file)?;
         serde_json::from_reader(file).context("parse build file")
     }
 }
@@ -255,11 +280,18 @@ mod should {
 
     #[test]
     fn parse_script() {
+        let config = Config::default();
         let script: Script = "test.sh".parse().expect("parse script");
-        assert_eq!(script.0, SCRIPTS_DIR.join("test.sh").to_str().unwrap());
+        assert_eq!(
+            script.0,
+            config.scripts_dir.join("test.sh").to_str().unwrap()
+        );
 
         let script: Script = "test".parse().expect("parse script");
-        assert_eq!(script.0, SCRIPTS_DIR.join("test.sh").to_str().unwrap());
+        assert_eq!(
+            script.0,
+            config.scripts_dir.join("test.sh").to_str().unwrap()
+        );
     }
 
     #[test]
@@ -279,14 +311,15 @@ mod should {
 
     #[test]
     fn starts_build() {
-        let script: Script = "test".parse().expect("parse script");
-        let build_file = "/tmp/build2.json";
-        script.start_build(build_file).expect("start build");
+        let mut builder = ScriptBuilder::build_new("foo");
+        builder.config = Config::from_base_dir("/tmp");
+        builder.start_build().unwrap();
 
-        let file = std::fs::File::open(build_file).expect("open build file");
-        let build_file: BuildFile = serde_json::from_reader(file).expect("parse build file");
-        assert_eq!(build_file.script_name, "test");
+        assert_eq!(builder.get_script_name(), "foo".to_string());
 
-        std::fs::remove_file("/tmp/build2.json").expect("remove build file");
+        let p = PathBuf::from("/tmp/please/build.json");
+        assert!(p.exists());
+
+        fs::remove_dir_all("/tmp/please").unwrap();
     }
 }
