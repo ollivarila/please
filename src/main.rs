@@ -1,19 +1,16 @@
 use crate::{config::Config, script::get_scripts};
 use anyhow::Context;
 use clap::{command, Parser, Subcommand};
+use dialoguer::Input;
 use owo_colors::{OwoColorize, Style};
 use script::{Script, ScriptBuilder};
-use std::io::stdin;
 
 mod config;
 mod history_parser;
 mod script;
 
-// TODO: chmod +x the script
 // TODO: Add a comment to get some info about the script
 // TODO: COLORIZE Maybe
-// TODO: Better error handling and messages, build file needss to be delete perhaps in some cases?
-// TODO: Maybe test some edge cases
 // TODO: Add README
 
 fn main() -> anyhow::Result<()> {
@@ -85,27 +82,7 @@ impl Command {
             }
             Command::Ask { words: _ } => {
                 let mut builder = ScriptBuilder::load_current()?;
-                let mut var_name = String::new();
-                let mut var_expr = String::new();
-                let mut var_value = String::new();
-
-                println!("Please enter variable name:");
-                stdin()
-                    .read_line(&mut var_name)
-                    .expect("read variable name");
-
-                println!(
-                    "Please enter the expression for the variable `{}`:",
-                    var_name
-                );
-                stdin().read_line(&mut var_expr).expect("read expr");
-
-                println!("Please enter the value for the variable `{}`:", var_name);
-                stdin().read_line(&mut var_value).expect("read value");
-
-                let var_expr = var_expr.trim().to_string();
-                let var_name = var_name.trim().to_string();
-                let var_value = var_value.trim().to_string();
+                let (var_name, var_expr, var_value) = ask_questions()?;
 
                 // Add var to build cache
                 builder.add_var(var_name.clone(), var_expr.clone());
@@ -130,6 +107,39 @@ impl Command {
 
         Ok(())
     }
+}
+
+/// Ask user for variable name, expression and value
+/// and return them as a tuple in (name, expr, value) order
+fn ask_questions() -> anyhow::Result<(String, String, String)> {
+    let var_name = Input::<String>::new()
+        .with_prompt("Varible name?")
+        .interact_text()
+        .context("read var name")?
+        .trim()
+        .to_string();
+
+    let var_expr = Input::<String>::new()
+        .with_prompt(format!(
+            "Please enter the expression for the variable `{}`:",
+            var_name
+        ))
+        .interact_text()
+        .context("read var expr")?
+        .trim()
+        .to_string();
+
+    let var_value = Input::<String>::new()
+        .with_prompt(format!(
+            "Please enter the value for the variable `{}`:",
+            var_name
+        ))
+        .interact_text()
+        .context("read var value")?
+        .trim()
+        .to_string();
+
+    Ok((var_name, var_expr, var_value))
 }
 
 #[derive(Parser, Debug)]

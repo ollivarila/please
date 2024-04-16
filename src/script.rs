@@ -1,18 +1,17 @@
+use crate::{
+    config::Config,
+    history_parser::{get_parser, HistoryParser},
+};
+use anyhow::{ensure, Context};
 use dirs::home_dir;
 use serde::{Deserialize, Serialize};
+use std::os::unix::fs::PermissionsExt;
 use std::{
     env,
     fs::{self, read_dir},
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
-};
-
-use anyhow::{ensure, Context};
-
-use crate::{
-    config::Config,
-    history_parser::{get_parser, HistoryParser},
 };
 
 /// Represents a script file in the please/scripts folder,
@@ -151,17 +150,23 @@ impl ScriptBuilder {
 
         self.build_file.save_as_new(build_file_path)
     }
+
     pub fn build(self) -> anyhow::Result<()> {
         let name = self.build_file.script_name.clone();
         let path = self.config.scripts_dir.join(format!("{name}.sh"));
 
-        let mut script = fs::File::create(path).context("create script file")?;
+        let mut script = fs::File::create(&path).context("create script file")?;
 
         let content = self.parse_lines()?.join("\n");
 
         script
             .write_all(content.as_bytes())
             .context("write contents to script")?;
+
+        // Make the script executable
+        let meta = fs::metadata(&path).context("get metadata")?;
+        let mut perms = meta.permissions();
+        perms.set_mode(0o755);
 
         self.delete_build()?;
 
