@@ -121,20 +121,14 @@ fn ask_questions() -> anyhow::Result<(String, String, String)> {
         .to_string();
 
     let var_expr = Input::<String>::new()
-        .with_prompt(format!(
-            "Please enter the expression for the variable `{}`:",
-            var_name
-        ))
+        .with_prompt(format!("Expression with `{}`?", var_name))
         .interact_text()
         .context("read var expr")?
         .trim()
         .to_string();
 
     let var_value = Input::<String>::new()
-        .with_prompt(format!(
-            "Please enter the value for the variable `{}`:",
-            var_name
-        ))
+        .with_prompt(format!("Value to use now?"))
         .interact_text()
         .context("read var value")?
         .trim()
