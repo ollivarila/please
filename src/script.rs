@@ -310,7 +310,7 @@ mod should {
     }
 
     #[test]
-    fn starts_build() {
+    fn start_build() {
         let mut builder = ScriptBuilder::build_new("foo");
         builder.config = Config::from_base_dir("/tmp");
         builder.start_build().unwrap();
@@ -321,5 +321,93 @@ mod should {
         assert!(p.exists());
 
         fs::remove_dir_all("/tmp/please").unwrap();
+    }
+
+    #[test]
+    fn give_corrent_string() {
+        let script: Script = "foobar".parse().unwrap();
+        let str = script.to_string();
+        assert_eq!(str, "foobar".to_string())
+    }
+
+    #[test]
+    fn run_script() {
+        fs::create_dir("/tmp/please3").unwrap_or_default();
+        let config = Config::from_base_dir("/tmp/please3");
+        fs::write(config.scripts_dir.join("foo.sh"), "echo bar > /dev/null").unwrap();
+        let script = Script("/tmp/please3/please/scripts/foo.sh".to_string());
+        script.run().unwrap();
+
+        fs::remove_dir_all("/tmp/please3").unwrap()
+    }
+
+    #[test]
+    #[should_panic]
+    fn not_run_invalid_script() {
+        let script: Script = "foobar".parse().unwrap();
+        script.run().unwrap()
+    }
+
+    #[test]
+    fn list_scripts() {
+        fs::create_dir("/tmp/please2").unwrap();
+        let config = Config::from_base_dir("/tmp/please2");
+        fs::write(config.scripts_dir.join("foo.sh"), "echo bar").unwrap();
+
+        let scripts = get_scripts(config).unwrap();
+
+        assert_eq!(scripts.len(), 1);
+
+        let script = &scripts[0];
+        assert_eq!(script.to_string(), "foo".to_string());
+
+        fs::remove_dir_all("/tmp/please2").unwrap()
+    }
+
+    #[test]
+    fn add_variable() {
+        let config = Config::from_base_dir("/tmp/builder");
+        let bf = BuildFile {
+            script_name: "foo".to_string(),
+            variables: vec![],
+        };
+
+        let mut builder = ScriptBuilder {
+            build_file: bf,
+            config: config.clone(),
+        };
+
+        builder.add_var("foo".to_string(), "bar".to_string());
+        builder.save_replace().unwrap();
+
+        let bf = BuildFile::current_build(&config).unwrap();
+
+        assert_eq!(bf.variables.len(), 1);
+        assert_eq!(bf.variables[0].value, "foo");
+        assert_eq!(bf.variables[0].expr, "bar");
+
+        fs::remove_dir_all("/tmp/builder").unwrap()
+    }
+
+    #[test]
+    fn delete_build() {
+        let config = Config::from_base_dir("/tmp/builder2");
+        let bf = BuildFile {
+            script_name: "foo".to_string(),
+            variables: vec![],
+        };
+
+        let builder = ScriptBuilder {
+            build_file: bf,
+            config: config.clone(),
+        };
+
+        builder.start_build().unwrap();
+        assert!(config.build_file_path.exists());
+        builder.delete_build().unwrap();
+
+        assert!(!config.build_file_path.exists());
+
+        fs::remove_dir_all("/tmp/builder2").unwrap()
     }
 }

@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.82", features = ["backtrace"] }
 clap = { version = "4.5.4", features = ["derive"] }
-colour = "0.7.0"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
 owo-colors = "4.0.0"

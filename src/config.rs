@@ -1,6 +1,7 @@
 use dirs::state_dir;
 use std::path::PathBuf;
 
+#[derive(Clone)]
 pub struct Config {
     pub state_dir: PathBuf,
     pub scripts_dir: PathBuf,
@@ -27,11 +28,7 @@ impl Config {
     #[allow(unused)]
     pub fn from_base_dir(dir: impl Into<PathBuf>) -> Self {
         let state_dir: PathBuf = dir.into();
-        assert!(
-            state_dir.exists(),
-            "base state dir does not exist: {}",
-            state_dir.to_str().unwrap_or_default()
-        );
+
         let state_dir = state_dir.join("please");
 
         let config = Config {
@@ -46,11 +43,11 @@ impl Config {
     }
     fn ensure_state(&self) {
         if !self.state_dir.exists() {
-            std::fs::create_dir(self.state_dir.as_path()).expect("should create state dir");
+            std::fs::create_dir_all(self.state_dir.as_path()).expect("should create state dir");
         }
 
         if !self.scripts_dir.exists() {
-            std::fs::create_dir(self.scripts_dir.as_path()).expect("should create scripts dir");
+            std::fs::create_dir_all(self.scripts_dir.as_path()).expect("should create scripts dir");
         }
 
         assert!(
@@ -74,16 +71,17 @@ mod should {
 
     #[test]
     fn create_config() {
-        let config = Config::from_base_dir("/tmp");
+        fs::create_dir("/tmp/config").unwrap();
+        let config = Config::from_base_dir("/tmp/config");
 
         assert!(config.scripts_dir.exists());
         assert!(config.state_dir.exists());
 
-        let expected_path = PathBuf::from("/tmp/please");
+        let expected_path = PathBuf::from("/tmp/config/please");
 
         assert_eq!(config.state_dir, expected_path);
         assert_eq!(config.scripts_dir, expected_path.join("scripts"));
 
-        fs::remove_dir_all("/tmp/please").unwrap();
+        fs::remove_dir_all("/tmp/config").unwrap();
     }
 }
