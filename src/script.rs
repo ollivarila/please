@@ -87,6 +87,12 @@ impl Script {
             .to_str()
             .expect("convert to str")
     }
+
+    pub fn try_delete(&self) -> anyhow::Result<()> {
+        let path = PathBuf::from(&self.0);
+        ensure!(path.exists(), "Script `{}` not found", self.script_name());
+        fs::remove_file(path).context("delete script")
+    }
 }
 
 pub fn get_scripts(config: Config) -> anyhow::Result<Vec<Script>> {

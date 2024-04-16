@@ -46,7 +46,7 @@ impl Command {
                 if let Some(script) = script {
                     let builder = ScriptBuilder::build_new(&script);
                     builder.start_build()?;
-                    println!("Started building script `{}` ^^", script);
+                    println!("Started building script `{}` ^^", script.style(purpel));
                 } else {
                     let builder = ScriptBuilder::load_current()?;
                     let name = builder.get_script_name();
@@ -100,8 +100,9 @@ impl Command {
                 // Save build cache
                 builder.save_replace()?;
             }
-            Command::Delete { script: _ } => {
-                todo!()
+            Command::Delete { script } => {
+                let script: Script = script.parse()?;
+                script.try_delete()?;
             }
         };
 
