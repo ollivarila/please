@@ -11,7 +11,6 @@ mod script;
 
 // TODO: Add a comment to get some info about the script
 // TODO: COLORIZE Maybe
-// TODO: Add README
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
